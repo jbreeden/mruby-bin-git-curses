@@ -32,13 +32,10 @@ class CommandLine < CUI::Window
     @input.on('return') do |e, value|
       trigger('command', value)
     end
-
-    @invalid = true
   end
 
   def render
     if @invalid
-      @io = CUI::WindowIO.new(self)
       @io.in_color(Colors::DEFAULT_ALT) do
         @io.goto(0, 0)
         @io.clear_line

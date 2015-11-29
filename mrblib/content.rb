@@ -71,7 +71,7 @@ module GitCurses
 
     def render
       if @invalid
-        @io = CUI::WindowIO.new(self)
+        $log.puts "Rending content"
         bounds_check
         @io.each_line do |line_num|
           @io.goto_line(line_num)

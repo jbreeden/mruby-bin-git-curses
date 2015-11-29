@@ -31,10 +31,14 @@ module EventLoop
     def run
       # Draw the initial screen
       render
+      CUI.screen.layout
 
       loop {
         # Handle pending events (ERR, probably -1, just means no events yet).
         until (c = Curses.wgetch((@event_source && @event_source.win) || event_window.win)) == Curses::ERR
+          if c == Curses::KEY_RESIZE
+            CUI.screen.layout
+          end
           event = KeyEvent.new(c)
           self.trigger(event)
           @event_source.trigger(event) if @event_source
@@ -82,15 +86,11 @@ module EventLoop
 
     def render
       self.trigger('render:start')
-      event_source = nil
-      @windows.each do |win|
-        win.render
-      end
-      # Make sure cursor is on event_source by rendering last
+      # Recursively call render down the UI tree from the root screen
+      CUI.screen.render
+      # Make sure the correct panel maintains focus
       if @event_source
-        $log.puts  "Render focus: #{@event_source}"
         @event_source.focus
-        @event_source.render
       end
       Curses.update_panels
       Curses.doupdate

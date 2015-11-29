@@ -2,11 +2,6 @@ module GitCurses
 class BlameCommandInterpreter
   include CUI::Events
 
-  def initialize(blame)
-    super()
-    @blame = blame
-  end
-
   def interpret(str)
     self.instance_eval(str)
   rescue Exception => ex

@@ -2,13 +2,15 @@ module CUI
 module WindowDelegates
   def self.win_delegate(name, *aliases)
     self.define_method(name) do |*args|
-      Curses.send(name, @win, *args)
+      Curses.send(name, win, *args)
     end
     aliases.flatten.each do |a|
       self.alias_method(a, name)
     end
   end
 
+  win_delegate :wclear, :clear
+  win_delegate :werase, :erase
   win_delegate :getattrs, :attrs
   win_delegate :getbegx, :begx
   win_delegate :getbegy, :begy
@@ -22,30 +24,24 @@ module WindowDelegates
   win_delegate :wvline, :vline
   win_delegate :wprintw, :printw
   win_delegate :wmove, :move
-  
-  # Would-be win delegate, but we bundle every window in a panel for correct
-  # stack ordering, so delegate to panel methods for a few things.
-  def mv(l, c)
-    Curses.move_panel(@panel, l, c)
-  end
 
   def del
-    Curses.delwin(@win)
-    Curses.del_panel(@win)
+    Curses.delwin(win)
+    Curses.del_panel(win)
   end
   alias delete del
 
   def box(verch=0, horch=0)
-    Curses.box(@win, verch, horch)
+    Curses.box(win, verch, horch)
   end
 
   def vline(ch=Curses::ACS_VLINE, n=0)
-    Curses.wvline(@win, ch, n)
+    Curses.wvline(win, ch, n)
   end
   alias wvline vline
 
   def hline(ch=Curses::ACS_HLINE, n=0)
-    Curses.whline(@win, ch, n)
+    Curses.whline(win, ch, n)
   end
   alias whline hline
 
@@ -72,9 +68,9 @@ module WindowDelegates
   end
 
   def with_attr(attr)
-    Curses.wattron(@win, attr)
+    Curses.wattron(win, attr)
     yield if block_given?
-    Curses.wattroff(@win, attr)
+    Curses.wattroff(win, attr)
   end
   alias with_color with_attr
   alias in_color with_attr

@@ -4,10 +4,18 @@ class WindowIO
 
   def initialize(window)
     if window.kind_of?(CUI::Window)
-      @win = window.win
+      @window = window
     else
       raise ArgumentError.new("WindowIO.new expected a CUI::Window, but got a #{win.class}")
     end
+  end
+
+  # The WindowDelegates work on the win attr of self.
+  # During resize events, windows may be replaced, so we
+  # must always delegate to the win attr of the Window
+  # we're wrapping to get the current curses handle.
+  def win
+    @window.win
   end
 
   def hrule

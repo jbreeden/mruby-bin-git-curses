@@ -6,7 +6,7 @@ module CUI
     # Instance Methods
     # ----------------
 
-    attr_accessor :win, :model
+    attr_accessor :win, :panel, :model, :io
 
     def initialize(*opt)
       super() # initialize events
@@ -30,39 +30,75 @@ module CUI
         @win = Curses.newwin(lines, cols, begy, begx)
         @panel = Curses.new_panel(@win)
       end
+      @io = CUI::WindowIO.new(self)
+      @invalid = true
+      @children = []
       Curses.keypad @win, true
       Curses.nodelay @win, true
-      @children = {}
     end
 
-    def io
-      CUI::WindowIO.new(self)
+    def add_child(child)
+      unless @children.include?(child)
+        @invalid = true
+        @children.push(child)
+      end
+    end
+
+    def add_children(*children)
+      children.flatten.each { |c| add_child(c) }
+    end
+
+    def remove_child(child)
+      @invalid = true if @children.include?(child)
+      @children.delete(child)
+    end
+
+    def remove_children(*children)
+      children.flatten.each { |c| remove_child(c) }
     end
 
     # Called by refresh, before the screen is updated.
     # Override to do any just-in-time output like addch/printw.
+    # By default just calls render_children
     def render
+      render_children
     end
 
-    def rerender
-      @invalid = true
-      render
+    def render_children
+      @children.each { |c| c.render }
+    end
+
+    # By default only calls layout_children
+    def layout(*args)
+      layout_children
+    end
+
+    def layout_children
+      @children.each { |c| c.layout }
     end
 
     # No easy way to resize windows in panels according to the documentation.
     # Using the recommended workaround. See: http://tldp.org/HOWTO/NCURSES-Programming-HOWTO/panels.html
     def resize(l, c)
-      @invalid = true
-      y, x = self.gety, self.getx
-      begy, begx = self.begy, self.begx
-      old_win = Curses.panel_window(@panel)
-      @win = Curses.newwin(l, c, begy, begx)
-      Curses.replace_panel(@panel, @win)
-      Curses.delwin(old_win)
-      Curses.keypad @win, true
-      Curses.nodelay @win, true
-      self.move(y, x)
-      Curses.refresh
+      unless maxy == l && maxx == c
+        @invalid = true
+        y, x = self.gety, self.getx
+        prev_begy, prev_begx = self.begy, self.begx
+        old_win = Curses.panel_window(@panel)
+        @win = Curses.newwin(l, c, prev_begy, prev_begx)
+        self.move(y, x)
+        Curses.replace_panel(@panel, @win)
+        Curses.delwin(old_win)
+        Curses.keypad @win, true
+        Curses.nodelay @win, true
+      end
+    end
+
+    def mv(l, c)
+      unless begy == l && begx == c
+        @invalid = true
+        Curses.move_panel(@panel, l, c)
+      end
     end
 
     def focus
@@ -71,7 +107,6 @@ module CUI
       Curses.show_panel(@panel)
       Curses.top_panel(@panel)
       Curses.wmove(@win, self.gety, self.getx)
-      $log.puts("Cursor at #{gety} #{getx}")
       unless focused?
         @focused = true
         if event_source && event_source != self
@@ -105,6 +140,10 @@ module CUI
   end
 
   def self.screen
-    @screen ||= CUI::Window.new(Curses.stdscr)
+    unless @screen
+      @screen = CUI::Window.new(Curses.stdscr)
+      Curses.bottom_panel(@screen.panel)
+    end
+    @screen
   end
 end

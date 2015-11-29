@@ -9,12 +9,10 @@ class BlameDetails < CUI::Window
   def initialize(*opts)
     super
     @model ||= BlameDetailsModel.new
-    @invalid = true
     @model.on(/change/) { @invalid = true }
   end
 
   def render
-    @io = CUI::WindowIO.new(self)
     if @invalid
       self.in_color(Colors::DEFAULT) do
         @io.each_line do |line|
