@@ -1,8 +1,11 @@
-module GitDig
+module GitCurses
   class Blame
+    include CUI::Events
+
     attr_accessor :lines, :commits
 
     def initialize
+      super
       # Indexed by line number
       @lines = []
       # hashes by the sha string
@@ -12,6 +15,7 @@ module GitDig
     def clear
       @lines = []
       @commits = {}
+      trigger('clear')
     end
 
     def load(file, rev='HEAD', &block)
@@ -30,6 +34,7 @@ module GitDig
           number_of_lines = tokens[3].to_i
 
           # Parse the commit
+          c = nil
           current_commit = nil
           if self.seen?(sha)
             # Advance past header, we've seen this commit
@@ -55,7 +60,7 @@ module GitDig
           # Parse the remaining lines in this chunk
           (number_of_lines - 1).times do
             line = io.gets
-            raise "Line doesn't look like a content line header: #{line}" unless line =~ /(\S+\s*){3}/
+            raise "Line doesn't look like a content line header: #{line}" unless line =~ /^(\S+\s*){3}$/
             tokens = line.split(' ')
             line_prev = tokens[1].to_i
             line_cur = tokens[2].to_i
@@ -67,6 +72,7 @@ module GitDig
           end
         end
       end
+      trigger('load')
     end
 
     def seen?(sha)
@@ -76,7 +82,7 @@ module GitDig
 
   commit_attrs = [:sha, :author, :author_mail, :author_time, :summary]
   class Commit
-    attr_accessor :sha, :author, :author_mail, :author_time, :summary
+    attr_reader :sha, :author, :author_mail, :author_time, :summary, :previous
     def initialize(sha = nil, author = nil, author_mail = nil, author_time = nil, summary = nil)
       @sha = sha; @author = author; @author_mail = author_mail; @author_time = author_time; @summary = summary;
     end
@@ -84,15 +90,28 @@ module GitDig
     def parse_str(str)
       str.each_line do |line|
         tokens = line.split(' ')
-        setter = "#{tokens[0].gsub('-', '_')}="
-        if self.respond_to?("#{tokens[0].gsub('-', '_')}=") && tokens.length > 1
-          self.send(setter, tokens[1..(tokens.length)].join(' '))
+        reader = "#{tokens[0].gsub('-', '_')}"
+        iv = "@#{reader}".to_sym
+        if self.respond_to?(reader) && tokens.length > 1
+          self.instance_variable_set(iv, tokens[1..(tokens.length)].join(' '))
         end
       end
 
-      self.author_time = Time.at(self.author_time.to_i) if self.author_time
+      @author_time = Time.at(@author_time.to_i) if @author_time
     end
   end
 
-  BlameLine = Struct.new(:commit, :line_prev, :line_cur, :content)
+  class BlameLine
+    attr_reader :commit,
+      :line_prev,
+      :line_cur,
+      :content
+
+    def initialize(commit, line_prev, line_cur, content)
+      @commit = commit
+      @line_prev = line_prev
+      @line_cur = line_cur
+      @content = content
+    end
+  end
 end

@@ -1,35 +1,44 @@
-module GitDig
-  HEADER_HEIGHT = 2
-  STATUS_BAR_HEIGHT = 1
-  COMMAND_LINE_HEIGHT = 1
+$DEBUG = false
+
+module GitCurses
+  BLAME_DETAILS_HEIGHT = 5
+  COMMAND_LINE_HEIGHT = 2
 
   def self.run(file)
     @file = file
+    @revision = 'HEAD'
     @blame = Blame.new
-    @blame.load(@file)
-    layout_ui
-    listen_for_events
-    @header_window.loading = false
+    @command_interpreter = BlameCommandInterpreter.new(@blame)
+    build_ui
+    bind_ui_events
+    bind_key_listener
+    bind_interpreter_events
+    @command_line_window.model.message = "Loading..."
+    CUI::EventLoop.once('render:end') do
+      @blame.load(@file)
+      @content_window.goto_line(0)
+      @command_line_window.model.message = "Done."
+      set_details
+    end
     CUI::EventLoop.run
   end
 
-  def self.layout_ui
-    @header_window = Header.new(lines: HEADER_HEIGHT, model: @blame)
-    @content_window = Content.new(
-      begin_y: HEADER_HEIGHT,
-      lines: Curses.LINES - HEADER_HEIGHT - STATUS_BAR_HEIGHT - COMMAND_LINE_HEIGHT,
-      model: @blame
+  def self.build_ui
+    @blame_details_window = BlameDetails.new(
+      lines: BLAME_DETAILS_HEIGHT,
+      begy: 0
     )
-    @status_bar_window = StatusBar.new(
-      lines: 1,
-      begin_y: Curses.LINES - 2
+    @content_window = Content.new(
+      model: @blame,
+      begy: BLAME_DETAILS_HEIGHT,
+      lines: Curses.LINES - BLAME_DETAILS_HEIGHT - COMMAND_LINE_HEIGHT,
     )
     @command_line_window = CommandLine.new(
-      lines: 1,
-      begin_y: Curses.LINES - 1
+      lines: COMMAND_LINE_HEIGHT,
+      begy: Curses.LINES - COMMAND_LINE_HEIGHT
     )
 
-    @windows = [@header_window, @content_window, @status_bar_window, @command_line_window]
+    @windows = [@content_window, @blame_details_window, @command_line_window]
 
     # Since this is a mode, should pull out the event loop
     # init, and just have an `enter` method that adds the appropriate
@@ -38,62 +47,102 @@ module GitDig
     @windows.each do |win|
       CUI::EventLoop.windows.push(win)
     end
+    set_details
     @command_line_window.focus
   end
 
-  def self.listen_for_events
-    # store it, so if we call on again it gets the same
-    # handler and doesn't register the callback again.
-    @key_listener ||= proc { |event|
-      case event.key
-      when 'q'.ord, 'Q'.ord
-        CUI::EventLoop.exit
-      when Curses::KEY_DOWN
-        @content_window.goto_next_line
-      when Curses::KEY_UP
-        @content_window.goto_previous_line
-      when 'p'.ord, 'P'.ord
-        if can_load_previous_revision?
-          @status_bar_window.status = "Loading..."
-          CUI::EventLoop.once('render:end') do
-            $log.puts "rendered... once?"
-            self.load_previous_revision
-            @status_bar_window.status = "Loaded!"
-          end
-        else
-          @status_bar_window.status = "No parent revision"
-        end
-      when Curses::KEY_RESIZE
-        layout_ui
-      when 'e'.ord, 'E'.ord
-        @command_line_window.readline
-      end
-      @header_window.key = event
-    }
-    CUI::EventLoop.on(CUI::KeyEvent, &@key_listener)
+  def self.reflow
+    @blame_details_window.resize(BLAME_DETAILS_HEIGHT, CUI.screen.maxx)
+    @blame_details_window.mv(0, 0)
 
-    @command_listener = proc { |cmd|
-      cmd = cmd.sub('command:', '')
-      @status_bar_window.status = "Got command: #{cmd}"
-    }
-    CUI.on(/^command:/, &@command_listener)
+    @content_window.resize(Curses.LINES - BLAME_DETAILS_HEIGHT - COMMAND_LINE_HEIGHT, CUI.screen.maxx)
+    @content_window.mv(BLAME_DETAILS_HEIGHT, 0)
+
+    @command_line_window.resize(COMMAND_LINE_HEIGHT, CUI.screen.maxx)
+    @command_line_window.mv(Curses.LINES - COMMAND_LINE_HEIGHT, 0)
   end
 
-  def self.load_previous_revision(&block)
-    if can_load_previous_revision?
-      @blame.load(@file, previous_revision)
-      # @content_window.render
-    else
-      @status_bar_window.status = "No parent revision"
-      @blame
+  def self.bind_ui_events
+    @command_line_window.on('command') do |e, cmd|
+      @command_interpreter.interpret(cmd)
+    end
+
+    @content_window.on('change:current_line') do
+      set_details
     end
   end
 
-  def self.can_load_previous_revision?
-    system("git rev-parse #{previous_revision} 1> /dev/null 2> /dev/null")
+  def self.bind_key_listener
+    CUI::EventLoop.on(CUI::KeyEvent) do |event|
+      case event.keyname
+      when '^Q'
+        CUI::EventLoop.exit
+      when 'KEY_DOWN'
+        @content_window.goto_next_line
+      when 'KEY_UP'
+        @content_window.goto_previous_line
+      when 'KEY_PPAGE'
+        @content_window.go_page_up
+      when 'KEY_NPAGE'
+        @content_window.go_page_down
+      when 'KEY_HOME'
+        @content_window.goto_first_line
+      when 'KEY_END'
+        @content_window.goto_last_line
+      when 'KEY_RESIZE'
+        reflow
+      end
+      @blame_details_window.model.key = event
+    end
+  end
+
+  def self.bind_interpreter_events
+    @command_interpreter.on('blame') do |e, sha, file|
+      @command_line_window.model.message = "Loading..."
+      CUI::EventLoop.once('render:end') do
+        @file = file || @file
+        @blame.load(@file, sha)
+        @revision = sha
+        @command_line_window.model.message = "Done."
+        set_details
+      end
+    end
+
+    @command_interpreter.on('pagedown') do
+      @content_window.go_page_down
+    end
+
+    @command_interpreter.on('pageup') do
+      @content_window.go_page_up
+    end
+
+    @command_interpreter.on('pagestart') do
+      @content_window.goto_first_line
+    end
+
+    @command_interpreter.on('pageend') do
+      @content_window.goto_last_line
+    end
+
+    @command_interpreter.on('goto') do |e, line|
+      @content_window.goto_line(line)
+    end
+
+    @command_interpreter.on('eval') do |e, proc|
+      self.instance_eval(&proc)
+    end
+
+    @command_interpreter.on('error') do |e, error|
+      @command_line_window.model.message = "Error: #{error}"
+    end
+  end
+
+  def self.set_details
+    @blame_details_window.model.status = "#{@revision}:#{@file}"
+    @blame_details_window.model.line = @content_window.current_line
   end
 
   def self.previous_revision
-    "#{@content_window.current_line.commit.sha}^"
+    Git.rev_parse "#{@content_window.current_line.commit.sha}^"
   end
 end

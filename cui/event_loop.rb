@@ -11,11 +11,13 @@ module EventLoop
   @windows = []
   @event_source = nil
 
+  ENV['ESCDELAY'] ||= '10'
   Curses.initscr
   Curses.raw # Don't generate signals, let the app handle all key presses.
   Curses.noecho
   Curses.start_color
   Curses.use_default_colors
+  Curses.noqiflush
 
   class << self
     attr_accessor :running,
@@ -27,23 +29,12 @@ module EventLoop
       :event_source
 
     def run
-      # The window that events are retrieved from.
-      # Recall that curses has a single event buffer for all windows.
-      # Also, curses will refresh the window used to getch (drawing it on screen),
-      # if it has been updated since last refreshed.
-      # Using a separate window that we never write to prevents interruptions
-      # in the normal render order.
-      @event_window ||= CUI::Window.new
-
       # Draw the initial screen
       render
 
       loop {
         # Handle pending events (ERR, probably -1, just means no events yet).
-        until (c = Curses.wgetch(@event_source.win || event_window.win)) == Curses::ERR
-          if c == Curses::KEY_RESIZE
-            Curses.refresh
-          end
+        until (c = Curses.wgetch((@event_source && @event_source.win) || event_window.win)) == Curses::ERR
           event = KeyEvent.new(c)
           self.trigger(event)
           @event_source.trigger(event) if @event_source
@@ -51,7 +42,7 @@ module EventLoop
         end
         break if @exit
 
-        ms_to_spare = ms_per_frame - ms_since_refresh
+        ms_to_spare = ms_per_frame - ms_since_render
         if ms_to_spare <= 0
           render
         elsif ms_to_spare > 5
@@ -59,7 +50,7 @@ module EventLoop
           # (TODO: Need a next_tick event to keep things awake)
           Curses.napms((ms_to_spare / 2).to_i)
         else
-          # Snooze it, but wake up in time to refresh
+          # Snooze it, but wake up in time to render
           Curses.napms(ms_to_spare)
         end
       }
@@ -72,8 +63,17 @@ module EventLoop
     end
 
     def event_source=(val)
-      @event_source = val || @event_window
-      @event_source.focus
+      @event_source = val || event_window
+    end
+
+    # Somewhere to read events from when the client
+    # hasn't set focus to any other window.
+    def event_window
+      unless @event_window
+        @event_window = CUI::Window.new
+        @event_window.hide
+      end
+      @event_window
     end
 
     def exit
@@ -84,20 +84,21 @@ module EventLoop
       self.trigger('render:start')
       event_source = nil
       @windows.each do |win|
-        win.refresh unless win.equal? @event_source
+        win.render
       end
-      # Make sure cursor is on event_source by refreshing last
+      # Make sure cursor is on event_source by rendering last
       if @event_source
+        $log.puts  "Render focus: #{@event_source}"
         @event_source.focus
-        @event_source.refresh
+        @event_source.render
       end
-
+      Curses.update_panels
       Curses.doupdate
       @t_last_render = now
       self.trigger('render:end')
     end
 
-    def ms_since_refresh
+    def ms_since_render
       now - @t_last_render
     end
 

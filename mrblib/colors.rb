@@ -1,20 +1,35 @@
-module GitDig
+module GitCurses
 module Colors
-  Curses.init_pair(1, Curses::COLOR_WHITE, Curses::COLOR_BLACK)
-  WHITE_ON_BLACK = Curses.color_pair(1)
 
-  Curses.init_pair(2, Curses::COLOR_BLACK, Curses::COLOR_WHITE)
-  BLACK_ON_WHITE = Curses.color_pair(2)
+  # Available Colors
+  # ----------------
+  # - MAGENTA
+  # - GREEN
+  # - WHITE
+  # - RED
+  # - YELLOW
+  # - CYAN
+  # - BLUE
+  # - BLACK
 
-  Curses.init_pair(3, Curses::COLOR_RED, Curses::COLOR_BLACK)
-  RED_ON_BLACK = Curses.color_pair(3)
+  def self.color(foreground, background)
+    val = self.const_get("#{foreground}_ON_#{background}") rescue nil
+    if val
+      return val
+    end
+    @i ||= 0
+    @i += 1
+    Curses.init_pair(@i, Curses.const_get("COLOR_#{foreground}".to_sym), Curses.const_get("COLOR_#{background}".to_sym))
+    self.const_set("#{foreground}_ON_#{background}", Curses.color_pair(@i))
+    return Curses.color_pair(@i)
+  end
 
-  Curses.init_pair(4, Curses::COLOR_BLUE, Curses::COLOR_BLACK)
-  BLUE_ON_BLACK = Curses.color_pair(4)
-
-  DEFAULT = WHITE_ON_BLACK
-  DEFAULT_ALT = BLACK_ON_WHITE
-  SHA = RED_ON_BLACK
-  TIME = BLUE_ON_BLACK
+  DEFAULT = color(:WHITE, :BLACK)
+  DEFAULT_ALT = color(:BLACK, :WHITE)
+  SHA = color(:RED, :BLACK)
+  AUTHOR = color(:YELLOW, :BLACK)
+  TIME = DEFAULT
+  LINE_NO = color(:GREEN, :BLACK)
+  SELECTED_LINE = color(:BLACK, :GREEN)
 end
 end
