@@ -1,10 +1,9 @@
-$DEBUG = false
+#! /usr/bin/env cui
 
+$DEBUG = false
 load 'mrblib/yargs.rb'
 
-# Framework
-$: << 'cui'
-load 'cui.rb'
+CUI.init
 
 # App Specific
 load 'mrblib/colors.rb'

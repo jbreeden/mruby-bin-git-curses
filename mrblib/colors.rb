@@ -24,12 +24,14 @@ module Colors
     return Curses.color_pair(@i)
   end
 
-  DEFAULT = color(:WHITE, :BLACK)
-  DEFAULT_ALT = color(:BLACK, :WHITE)
-  SHA = color(:RED, :BLACK)
-  AUTHOR = color(:YELLOW, :BLACK)
-  TIME = DEFAULT
-  LINE_NO = color(:GREEN, :BLACK)
-  SELECTED_LINE = color(:BLACK, :GREEN)
+  def self.init
+    DEFAULT = color(:WHITE, :BLACK)
+    DEFAULT_ALT = color(:BLACK, :WHITE)
+    SHA = color(:RED, :BLACK)
+    AUTHOR = color(:YELLOW, :BLACK)
+    TIME = DEFAULT
+    LINE_NO = color(:GREEN, :BLACK)
+    SELECTED_LINE = color(:BLACK, :GREEN)
+  end
 end
 end

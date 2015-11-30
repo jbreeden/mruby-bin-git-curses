@@ -71,7 +71,6 @@ module GitCurses
 
     def render
       if @invalid
-        $log.puts "Rending content"
         bounds_check
         @io.each_line do |line_num|
           @io.goto_line(line_num)

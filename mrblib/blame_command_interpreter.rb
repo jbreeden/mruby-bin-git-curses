@@ -2,19 +2,36 @@ module GitCurses
 class BlameCommandInterpreter
   include CUI::Events
 
+  def initialize()
+    super()
+  end
+
   def interpret(str)
-    self.instance_eval(str)
+    tokens = Shellwords.split(str)
+    self.send(tokens[0], *tokens[1..(tokens.length)]) if tokens.length > 0
   rescue Exception => ex
     trigger('error', ex)
   end
 
-  def blame(commit, file=nil)
-    if sha = Git.rev_parse(commit, file)
-      trigger('blame', sha, file)
-    else
-      trigger('error', "No such commit #{commit} #{'for file ' + file if file}")
-    end
+  def blame(ref, file = nil)
+    trigger('blame', ref, file)
   end
+  alias b blame
+
+  def blame_prev
+    trigger('blame_prev')
+  end
+  alias bp blame_prev
+
+  def blame_line
+    trigger('blame_line')
+  end
+  alias bl blame_line
+
+  def blame_head
+    trigger('blame_head')
+  end
+  alias bh blame_head
 
   def pagedown
     trigger('pagedown')
@@ -41,11 +58,19 @@ class BlameCommandInterpreter
   alias last pageend
 
   def goto(line_num)
-    trigger('goto', line_num)
+    if /[0-9]+/ =~ line_num
+      trigger('goto', line_num.to_i)
+    else
+      trigger('error', "Not a number - #{line_num}")
+    end
   end
 
-  def eval(&block)
-    trigger('eval', block)
+  def show
+    trigger('show')
+  end
+
+  def method_missing(name, *args, &block)
+    raise "No such command: #{name}"
   end
 end
 end

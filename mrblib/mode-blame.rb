@@ -1,10 +1,10 @@
 $DEBUG = false
 
 module GitCurses
-  def self.run(file)
-    blame_view = BlameView.new({file: file})
+  def self.run(file, rev)
+    blame_view = BlameView.new({file: file, revision: rev})
     CUI.screen.add_child(blame_view)
-    CUI::EventLoop.run
+    CUI.run
   end
 
   class BlameModel < CUI::Model
@@ -50,7 +50,7 @@ module GitCurses
       command_line.focus
 
       command_line.model.message = "Loading..."
-      CUI::EventLoop.once('render:end') do
+      CUI.once('render:end') do
         model.blame.load(model.file)
         content.goto_line(0)
         command_line.model.message = "Done."
@@ -85,22 +85,28 @@ module GitCurses
     end
 
     def bind_key_listener
-      CUI::EventLoop.on(CUI::KeyEvent) do |event|
+      CUI.on(CUI::KeyEvent) do |event|
         case event.keyname
         when '^Q', '^C'
-          CUI::EventLoop.exit
-        when 'KEY_DOWN'
+          CUI.exit
+        when 'KEY_DOWN', '^N'
           content.goto_next_line
-        when 'KEY_UP'
+          command_line.model.message = ""
+        when 'KEY_UP', '^P'
           content.goto_previous_line
+          command_line.model.message = ""
         when 'KEY_PPAGE'
           content.go_page_up
+          command_line.model.message = ""
         when 'KEY_NPAGE'
           content.go_page_down
+          command_line.model.message = ""
         when 'KEY_HOME'
           content.goto_first_line
+          command_line.model.message = ""
         when 'KEY_END'
           content.goto_last_line
+          command_line.model.message = ""
         end
         blame_details.model.key = event
       end
@@ -108,38 +114,64 @@ module GitCurses
 
     def bind_interpreter_events
       command_interpreter.on('blame') do |e, sha, file|
-        command_line.model.message = "Loading..."
-        CUI::EventLoop.once('render:end') do
-          model.file = file || model.file
-          model.blame.load(model.file, sha)
-          model.revision = sha
-          command_line.model.message = "Done."
-          set_details
+        blame(sha, file)
+      end
+
+      command_interpreter.on('blame_head') do |e|
+        blame('head')
+      end
+
+      command_interpreter.on('blame_line') do |e|
+        blame(content.current_line.commit.sha)
+      end
+
+      command_interpreter.on('blame_prev') do |e|
+        # Split the sha and file name into separate args
+        prev = content.current_line.commit.previous
+        if prev
+          blame(*prev.split(' '))
+        else
+          command_line.model.message = "Error: No previous commit"
         end
+      end
+
+      command_interpreter.on('show') do |e, cmd|
+        Curses.endwin
+        clear_cmd
+        cmd = "git show #{content.current_line.commit.sha} -- #{model.file}"
+        puts cmd
+        system(cmd)
+        $stdout.print "Back to blame (Y/n)? "
+        response = $stdin.gets.strip
+        if response.start_with?('n') || response.start_with?('N')
+          exit
+        end
+        Curses.initscr
       end
 
       command_interpreter.on('pagedown') do
         content.go_page_down
+        command_line.model.message = ""
       end
 
       command_interpreter.on('pageup') do
         content.go_page_up
+        command_line.model.message = ""
       end
 
       command_interpreter.on('pagestart') do
         content.goto_first_line
+        command_line.model.message = ""
       end
 
       command_interpreter.on('pageend') do
         content.goto_last_line
+        command_line.model.message = ""
       end
 
       command_interpreter.on('goto') do |e, line|
         content.goto_line(line)
-      end
-
-      command_interpreter.on('eval') do |e, proc|
-        self.instance_eval(&proc)
+        command_line.model.message = ""
       end
 
       command_interpreter.on('error') do |e, error|
@@ -147,8 +179,37 @@ module GitCurses
       end
     end
 
+    def blame(ref, file=nil)
+      if 'commit' != Git.obj_type(ref) &&
+        command_line.model.message = "Error: Not a commit - #{ref}"
+      elsif 'blob' != Git.obj_type(ref + ':' + (file || model.file))
+        command_line.model.message = "Error: Not an object - #{ref}:#{file}"
+      else
+        command_line.model.message = "Loading..."
+        CUI.once('render:end') do
+          model.file = file || model.file
+          model.blame.load(model.file, ref)
+          model.revision = ref
+          command_line.model.message = "Done."
+          set_details
+        end
+      end
+    end
+
     def previous_revision
-      Git.rev_parse "#{content.current_line.commit.sha}^"
+      if 'commit' == Git.obj_type("#{content.current_line.commit.sha}^")
+        Git.rev_parse("#{content.current_line.commit.sha}^")
+      else
+        nil
+      end
+    end
+
+    def clear_cmd
+      if ENV['OS'] && ENV['OS'].downcase.start_with?('win')
+        system('cls')
+      else
+        system('clear')
+      end
     end
   end
 end
