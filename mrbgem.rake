@@ -17,5 +17,6 @@ MRuby::Gem::Specification.new('mruby-bin-git-curses') do |spec|
   spec.rbfiles.push "#{gem_dir}/mrblib/command_line.rb"
   spec.rbfiles.push "#{gem_dir}/mrblib/blame_command_interpreter.rb"
   spec.rbfiles.push "#{gem_dir}/mrblib/git.rb"
+  spec.rbfiles.push "#{gem_dir}/mrblib/yargs.rb"
   spec.rbfiles.push "#{gem_dir}/mrblib/main.rb"
 end

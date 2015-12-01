@@ -1,10 +1,7 @@
 #! /usr/bin/env cui
 
 def __main__(argv)
-  $DEBUG = false
-
-  puts argv.join(',')
-
+  # Only command supported so far
   if argv[0] != 'blame'
     $stderr.puts "Usage: git-curses blame [<rev>] <file>"
     exit 1
