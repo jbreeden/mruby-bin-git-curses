@@ -1,7 +1,40 @@
 $DEBUG = false
 
 module GitCurses
-  def self.run(file, rev)
+  def self.mode_blame(argv)
+    if argv.length == 2
+      rev = 'HEAD'
+      file = argv[1]
+    elsif argv.length == 3
+      rev = argv[1]
+      file = argv[2]
+    end
+
+    unless File.exists?(file)
+      $stderr.puts "No such file: #{file}"
+      usage
+      exit 1
+    end
+
+    unless 'commit' == Git.obj_type(rev)
+      if rev =~ /head/i
+        $stderr.puts "Not a git repo"
+        usage
+      else
+        $stderr.puts "No such commit: #{rev}"
+        usage
+      end
+      exit 1
+    end
+
+    unless 'blob' == Git.obj_type("#{rev}:#{file}")
+      $stderr.puts "No such object: #{rev}:#{file}"
+      usage
+      exit 1
+    end
+
+    CUI.init
+    GitCurses::Colors.init
     blame_view = BlameView.new({file: file, revision: rev})
     CUI.screen.add_child(blame_view)
     CUI.run
