@@ -19,8 +19,9 @@ COMMAND(s)
 Usage: git-curses blame [<rev>] <file>
 
 Commands
-  All commands are essentially ruby method calls, and follow ruby syntax.
-  Ex: `blame "HEAD^"` would blame the parent commit of HEAD.
+  Commands entered in the command line are treated like shell commands.
+  (No need to quote strings, unless they have spaces, etc.)
+  Ex: `blame HEAD^` would blame the parent commit of HEAD.
   
   blame sha [, file] 
     Blame the given sha from the current file, or the `file` arg.
