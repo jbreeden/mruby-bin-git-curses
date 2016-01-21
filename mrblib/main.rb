@@ -1,14 +1,19 @@
 #! /usr/bin/env cui
 
-def usage(f=$stderr)
-  f.puts "Usage: git-curses blame [<rev>] <file>"
+def self.usage(f=$stderr)
+  f.puts <<-EOS
+Usage: git curses COMMAND [OPTIONS...]
+
+COMMANDs
+  blame - Perform an interactive git blame
+EOS
 end
 
 def __main__(argv)
   # Only command supported so far
   case argv[0]
   when 'blame'
-    GitCurses.mode_blame(argv)
+    GitCurses::BlameMode.run(argv)
   else
     usage
     exit 1

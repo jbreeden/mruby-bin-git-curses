@@ -80,9 +80,9 @@ module GitCurses
     end
   end
 
-  commit_attrs = [:sha, :author, :author_mail, :author_time, :summary]
   class Commit
     attr_reader :sha, :author, :author_mail, :author_time, :summary, :previous
+  
     def initialize(sha = nil, author = nil, author_mail = nil, author_time = nil, summary = nil)
       @sha = sha; @author = author; @author_mail = author_mail; @author_time = author_time; @summary = summary;
     end

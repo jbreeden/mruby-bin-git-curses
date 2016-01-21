@@ -68,6 +68,17 @@ class BlameCommandInterpreter
   def show
     trigger('show')
   end
+  
+  def help
+    trigger('help')
+  end
+  
+  def exit
+    Curses.endwin
+    Kernel.exit(0)
+  end
+  alias quit exit
+  alias q exit
 
   def method_missing(name, *args, &block)
     raise "No such command: #{name}"

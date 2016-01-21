@@ -10,6 +10,7 @@ int main(int argc, char *argv[])
   int i;
   int return_value;
 
+  /* Don't include the exe name... just the args relevant to the scripts */
   for (i = 1; i < argc; i++) {
     mrb_ary_push(mrb, ARGV, mrb_str_new_cstr(mrb, argv[i]));
   }
